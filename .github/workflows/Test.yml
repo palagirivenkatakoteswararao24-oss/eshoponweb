@@ -3,9 +3,9 @@ name: Test workflow
 on: workflow_dispatch
 
 jobs:
-   runs-on: ubuntu-latest
    build:
+       runs-on: ubuntu-latest
        steps:
-          -uses: action/checkout@ve4
-          -name: build.net code 
-           run:  echo "this is .net build stage"   
+       -uses: action/checkout@ve4
+       -name: build.net code 
+        run:  echo "this is .net build stage"   
