@@ -3,7 +3,7 @@ name: eShopOnWeb CI
 on:
   push:
     branches:
-      - any
+      - main
   pull_request:
     branches:
       - main
