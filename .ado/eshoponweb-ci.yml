@@ -1,55 +1,77 @@
-#NAME THE PIPELINE SAME AS FILE (WITHOUT ".yml")
-# trigger:
-# - main
 
-resources:
-  repositories:
-    - repository: self
-      trigger: none
+# Build Pipeline - .NET Application
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  name: KotiSHA
 
 stages:
 - stage: Build
-  displayName: Build .Net Core Solution
+  displayName: 'Build .NET Core Solution'
+
   jobs:
   - job: Build
-    pool:
-      name: KotiSHA
+    displayName: 'Build and Test Application'
+
     steps:
+    # 1. Checkout source code
+    - checkout: self
+
+    # 2. Check .NET SDK
+    - task: PowerShell@2
+      displayName: 'Check .NET SDK'
+      inputs:
+        targetType: 'inline'
+        script: |
+          dotnet --info
+
+    # 3. Restore NuGet packages
     - task: DotNetCoreCLI@2
-      displayName: Restore
+      displayName: 'Restore'
       inputs:
         command: 'restore'
         projects: '**/*.sln'
-        feedsToUse: 'select'
 
+    # 4. Build solution
     - task: DotNetCoreCLI@2
-      displayName: Build
+      displayName: 'Build'
       inputs:
         command: 'build'
         projects: '**/*.sln'
-    
+        arguments: '--configuration Release --no-restore'
+
+    # 5. Run unit tests
     - task: DotNetCoreCLI@2
-      displayName: Test
+      displayName: 'Test'
       inputs:
         command: 'test'
         projects: 'tests/UnitTests/*.csproj'
-    
+        arguments: '--configuration Release --no-build'
+
+    # 6. Publish web application
     - task: DotNetCoreCLI@2
-      displayName: Publish
+      displayName: 'Publish Website'
       inputs:
         command: 'publish'
         publishWebProjects: true
-        arguments: '-o $(Build.ArtifactStagingDirectory)'
-    
+        arguments: '--configuration Release --output $(Build.ArtifactStagingDirectory)/Website'
+        zipAfterPublish: false
+
+    # 7. Publish website artifact
     - task: PublishPipelineArtifact@1
-      displayName: Publish Artifacts ADO - Website
+      displayName: 'Publish Website Artifact'
       inputs:
-        targetPath: '$(Build.ArtifactStagingDirectory)'
+        targetPath: '$(Build.ArtifactStagingDirectory)/Website'
         artifact: 'Website'
         publishLocation: 'pipeline'
 
+    # 8. Publish Bicep artifact
     - task: PublishPipelineArtifact@1
-      displayName: Publish Artifacts ADO - Bicep
+      displayName: 'Publish Bicep Artifact'
       inputs:
         targetPath: '$(Build.SourcesDirectory)/infra/webapp.bicep'
         artifact: 'Bicep'
