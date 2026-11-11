@@ -1,19 +1,91 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
 
-trigger:
-- main
+
+trigger: none
+
+resources:
+  pipelines:
+  - pipeline: ci
+    source: YOUR_CI_PIPELINE_NAME
+    trigger:
+      branches:
+        include:
+        - main
 
 pool:
-  vmImage: ubuntu-latest
+  name: AzureVM-AgentPool
 
-steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
+stages:
+- stage: Deploy
+  displayName: Deploy to IIS
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+  jobs:
+  - job: DeployToIIS
+    displayName: Deploy Application to Windows VM
+
+    steps:
+    - checkout: none
+
+    # 1. Download CI artifact
+    - download: ci
+      artifact: drop
+
+    # 2. Stop IIS application pool
+    - task: PowerShell@2
+      displayName: Stop IIS
+      inputs:
+        targetType: inline
+        script: |
+          Import-Module WebAdministration
+
+          $pool = "DefaultAppPool"
+
+          if ((Get-WebAppPoolState -Name $pool).Value -eq "Started") {
+              Stop-WebAppPool -Name $pool
+          }
+
+    # 3. Deploy application files
+    - task: PowerShell@2
+      displayName: Copy Application Files
+      inputs:
+        targetType: inline
+        script: |
+          $source = "$(Pipeline.Workspace)\ci\drop"
+          $destination = "C:\inetpub\wwwroot\eshoponweb"
+
+          if (!(Test-Path $source)) {
+              throw "Artifact not found: $source"
+          }
+
+          New-Item -ItemType Directory -Force -Path $destination
+
+          robocopy $source $destination /MIR
+
+          if ($LASTEXITCODE -ge 8) {
+              throw "Robocopy failed with exit code $LASTEXITCODE"
+          }
+
+          Write-Host "Application files copied successfully"
+
+    # 4. Start IIS application pool
+    - task: PowerShell@2
+      displayName: Start IIS
+      inputs:
+        targetType: inline
+        script: |
+          Import-Module WebAdministration
+          Start-WebAppPool -Name "DefaultAppPool"
+
+    # 5. Verify deployment
+    - task: PowerShell@2
+      displayName: Verify Deployment
+      inputs:
+        targetType: inline
+        script: |
+          $path = "C:\inetpub\wwwroot\eshoponweb\web.config"
+
+          if (Test-Path $path) {
+              Write-Host "CD Deployment Successful!"
+          }
+          else {
+              throw "Deployment failed: web.config not found"
+          }
